@@ -31,14 +31,26 @@ PYTHONPATH=src python3 tools/prellm_cost_benchmark.py --swebench-length 3
 
 ## Live run
 
-Live mode requires `OPENROUTER_API_KEY` for the advanced model. By default, the harness uses `openai/gpt-5.5-pro` and estimates price with OpenRouter-listed rates of `$30/M` input tokens and `$180/M` output tokens unless provider usage returns a direct cost.
+Live mode requires API access for the advanced model. By default, the harness uses the direct OpenAI API provider with `gpt-5.5-pro`.
+ChatGPT web/desktop subscriptions are not API credentials; set `OPENAI_API_KEY` for programmable runs.
+Token cost is estimated from the CLI rates unless provider usage returns a direct cost.
+
+```bash
+OPENAI_API_KEY=... \
+PYTHONPATH=src python3 tools/prellm_cost_benchmark.py \
+  --execute \
+  --swebench-length 3 \
+  --output artifacts/prellm_cost_benchmark.live.json
+```
+
+OpenRouter remains available only as an explicit alternate provider:
 
 ```bash
 OPENROUTER_API_KEY=... \
 PYTHONPATH=src python3 tools/prellm_cost_benchmark.py \
   --execute \
-  --swebench-length 3 \
-  --output artifacts/prellm_cost_benchmark.live.json
+  --advanced-provider openrouter \
+  --advanced-model openai/gpt-5.5-pro
 ```
 
 Override rates if pricing changes:

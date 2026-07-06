@@ -19,7 +19,8 @@ from prellm_gate import GateRequest, GateRoute, gate_request
 HF_ROWS_URL = "https://datasets-server.huggingface.co/rows"
 DEFAULT_DATASET = "princeton-nlp/SWE-bench_Lite"
 DEFAULT_SPLIT = "test"
-DEFAULT_ADVANCED_MODEL = "openai/gpt-5.5-pro"
+DEFAULT_ADVANCED_PROVIDER = "openai"
+DEFAULT_ADVANCED_MODEL = "gpt-5.5-pro"
 DEFAULT_ADVANCED_INPUT_COST_PER_1M = 30.0
 DEFAULT_ADVANCED_OUTPUT_COST_PER_1M = 180.0
 ROUTES = {route.value for route in GateRoute}
@@ -262,24 +263,43 @@ def openai_base_url(url: str) -> str:
     return url[:-3].rstrip("/") if url.rstrip("/").endswith("/v1") else url.rstrip("/")
 
 
-def call_openrouter(model: str, messages: list[dict[str, str]], max_tokens: int, temperature: float) -> tuple[str, dict[str, Any], float]:
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENROUTER_API_KEY is required when --execute is set")
+def call_advanced_model(
+    provider: str,
+    model: str,
+    messages: list[dict[str, str]],
+    max_tokens: int,
+    temperature: float,
+) -> tuple[str, dict[str, Any], float]:
+    if provider == "openai":
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY is required when --execute --advanced-provider openai is set")
+        url = "https://api.openai.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+    elif provider == "openrouter":
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            raise RuntimeError("OPENROUTER_API_KEY is required when --execute --advanced-provider openrouter is set")
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/bo-bi-beep/prellm-gate",
+            "X-Title": "prellm-gate cost benchmark",
+        }
+    else:
+        raise RuntimeError(f"unsupported advanced provider: {provider}")
     body = {
         "model": model,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/bo-bi-beep/prellm-gate",
-        "X-Title": "prellm-gate cost benchmark",
-    }
     started = time.perf_counter()
-    payload = request_json("https://openrouter.ai/api/v1/chat/completions", body=body, headers=headers)
+    payload = request_json(url, body=body, headers=headers)
     elapsed_ms = (time.perf_counter() - started) * 1000
     return payload["choices"][0]["message"]["content"], payload.get("usage") or {}, elapsed_ms
 
@@ -424,7 +444,13 @@ def run_advanced_call(
     messages = advanced_messages(case)
     prompt_text = "\n".join(message["content"] for message in messages)
     if args.execute:
-        content, raw_usage, elapsed_ms = call_openrouter(args.advanced_model, messages, args.max_advanced_tokens, args.temperature)
+        content, raw_usage, elapsed_ms = call_advanced_model(
+            args.advanced_provider,
+            args.advanced_model,
+            messages,
+            args.max_advanced_tokens,
+            args.temperature,
+        )
         usage = usage_from_provider(
             raw_usage,
             prompt_text,
@@ -654,6 +680,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--split", default=DEFAULT_SPLIT)
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--swebench-length", type=int, default=3)
+    parser.add_argument("--advanced-provider", choices=("openai", "openrouter"), default=DEFAULT_ADVANCED_PROVIDER)
     parser.add_argument("--advanced-model", default=DEFAULT_ADVANCED_MODEL)
     parser.add_argument("--advanced-input-cost-per-1m", type=float, default=DEFAULT_ADVANCED_INPUT_COST_PER_1M)
     parser.add_argument("--advanced-output-cost-per-1m", type=float, default=DEFAULT_ADVANCED_OUTPUT_COST_PER_1M)
@@ -691,6 +718,7 @@ def main() -> None:
             "swebench_offset": args.offset,
         },
         "pricing": {
+            "advanced_provider": args.advanced_provider,
             "advanced_model": args.advanced_model,
             "advanced_input_cost_per_1m": args.advanced_input_cost_per_1m,
             "advanced_output_cost_per_1m": args.advanced_output_cost_per_1m,
