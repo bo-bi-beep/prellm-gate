@@ -1,0 +1,24 @@
+{
+  "cases": [
+    {
+      "instance_id": "django__django-0001",
+      "repo": "django/django",
+      "problem_statement": "A model field validation path produces an incorrect error when a custom constraint is evaluated during save. Identify the failing path, update the implementation, and preserve existing behavior with a regression test."
+    },
+    {
+      "instance_id": "pytest-dev__pytest-0001",
+      "repo": "pytest-dev/pytest",
+      "problem_statement": "A parametrized test report loses useful node id information after collection. Modify the reporting logic and add coverage for the failing parametrization case."
+    },
+    {
+      "instance_id": "pallets__flask-0001",
+      "repo": "pallets/flask",
+      "problem_statement": "A request context helper returns a stale value when nested contexts are pushed and popped. Fix the lifecycle handling and add a regression test."
+    },
+    {
+      "instance_id": "sympy__sympy-0001",
+      "repo": "sympy/sympy",
+      "problem_statement": "A simplification routine mishandles an edge case involving symbolic powers. Update the simplifier and add tests that cover the reported expression."
+    }
+  ]
+}

@@ -4,6 +4,16 @@ Cheap pre-inference gating for trivial agent calls.
 
 `prellm-gate` is a small router that decides whether a request should be handled by rules, cache, retrieval, a cheap model, or an expensive model.
 
+## Paper
+
+This prototype implements the routing idea inspired by:
+
+- **AgentWorld: An Interactive Simulation Platform for Agentic AI**
+- arXiv: https://arxiv.org/abs/2606.24597
+
+The paper frames agent work as environment trajectories: actions, observations, tools, domains, and outcomes.
+`prellm-gate` applies that framing before inference: inspect cheap request and trajectory signals first, then decide whether the next step deserves a deterministic handler, cache hit, cheap local model, or stronger advanced model.
+
 ## Why this exists
 
 Coding agents and tool-heavy workflows waste latency, money, and energy on requests that do not need full inference.
@@ -13,6 +23,7 @@ This project explores a cheap pre-LLM gate that catches obvious trivia, repeats,
 
 - Classifies requests before model invocation
 - Routes trivial work to rules, cache, or retrieval
+- Allows a cheap local LLM to act as a gate before escalating hard work
 - Reads recent action/observation trajectory signals when available
 - Escalates only when uncertainty or task value is high enough
 - Records decisions so threshold choices can be measured instead of guessed
@@ -28,7 +39,7 @@ This project explores a cheap pre-LLM gate that catches obvious trivia, repeats,
 
 - `rules` for exact-match or deterministic responses
 - `cache` for repeated requests or known outputs
-- `cheap-model` for ambiguous but low-value cases
+- `cheap-model` for ambiguous but low-value cases, including a small local LLM gate
 - `expensive-model` for real reasoning or high-risk tasks
 - `clarify` when the request is underspecified
 
@@ -89,6 +100,7 @@ The goal is not to win on accuracy alone, but to measure:
 - false deflections
 - route mix
 - decision latency
+- estimated route cost versus an all-advanced-model baseline
 
 Run it with:
 
@@ -112,12 +124,28 @@ Unless a row provides `expected_route`, the coding loader expects `expensive-mod
 PYTHONPATH=src python3 -m prellm_gate.eval --suite coding --jsonl path/to/benchmark.jsonl
 ```
 
+## SWE-bench-style eval
+
+The SWE-bench-style suite treats repository issue-fixing tasks as high-value coding work.
+For now the bundled cases are synthetic, but the loader accepts external JSONL with fields such as `instance_id`, `repo`, and `problem_statement`.
+The important metrics are both quality and economics:
+
+- `false_deflections`: cases that should have gone to the advanced model but were routed cheaply
+- `elapsed_ms` and `avg_decision_ms`: routing overhead
+- `estimated_cost_units`: route-cost estimate for the gate policy
+- `estimated_cost_savings_rate`: savings against an all-advanced-model baseline
+
+```bash
+PYTHONPATH=src python3 -m prellm_gate.eval --suite swebench
+PYTHONPATH=src python3 -m prellm_gate.eval --suite swebench --jsonl path/to/swebench.jsonl
+```
+
 ## MVP scope
 
 - one synchronous gate API
 - one rule-based classifier
 - one fallback model path
-- one toy evaluation runner and one coding benchmark-style runner
+- one toy evaluation runner, one coding benchmark-style runner, and one SWE-bench-style runner
 - one test suite for core routing behavior
 
 ## Open questions
@@ -133,4 +161,4 @@ PYTHONPATH=src python3 -m prellm_gate.eval --suite coding --jsonl path/to/benchm
 2. Add a benchmark harness with realistic examples
 3. Add observability for routing outcomes
 4. Compare rules-only, hybrid, and cheap-model gate variants
-5. Decide whether a public repo is worth publishing
+5. Add real SWE-bench Lite/Verified adapters and cost traces

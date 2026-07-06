@@ -112,7 +112,7 @@ def _trajectory_signals(request: GateRequest) -> dict[str, Any]:
 def _is_coding_task(request: GateRequest) -> bool:
     domain = request.context.get("domain")
     benchmark = request.context.get("benchmark")
-    if domain == "coding" or benchmark in {"humaneval", "mbpp", "coding"}:
+    if domain == "coding" or benchmark in {"humaneval", "mbpp", "coding", "swebench"}:
         return True
 
     text = _normalize(request.text)

@@ -1,7 +1,7 @@
 import unittest
 
 from prellm_gate import GateRequest, GateRoute, TrajectoryStep, gate_request
-from prellm_gate.eval import run_coding_eval, run_toy_eval
+from prellm_gate.eval import run_coding_eval, run_swebench_eval, run_toy_eval
 
 
 class GateTests(unittest.TestCase):
@@ -87,6 +87,8 @@ class GateTests(unittest.TestCase):
         self.assertGreaterEqual(result["total"], 1)
         self.assertEqual(result["correct"], result["total"])
         self.assertIn("deflection_rate", result)
+        self.assertIn("estimated_cost_units", result)
+        self.assertIn("avg_decision_ms", result)
         self.assertEqual(result["false_deflections"], 0)
 
     def test_coding_eval_runs_without_false_deflections(self) -> None:
@@ -94,6 +96,14 @@ class GateTests(unittest.TestCase):
 
         self.assertGreaterEqual(result["total"], 1)
         self.assertEqual(result["suite"], "coding")
+        self.assertEqual(result["false_deflections"], 0)
+        self.assertEqual(result["route_counts"][GateRoute.EXPENSIVE_MODEL.value], result["total"])
+
+    def test_swebench_eval_runs_without_false_deflections(self) -> None:
+        result = run_swebench_eval()
+
+        self.assertGreaterEqual(result["total"], 1)
+        self.assertEqual(result["suite"], "swebench")
         self.assertEqual(result["false_deflections"], 0)
         self.assertEqual(result["route_counts"][GateRoute.EXPENSIVE_MODEL.value], result["total"])
 
