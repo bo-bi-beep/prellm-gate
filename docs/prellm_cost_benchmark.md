@@ -2,9 +2,9 @@
 
 `tools/prellm_cost_benchmark.py` compares three strategies:
 
-1. `baseline_all_advanced`: every case calls `openai/gpt-5.5-pro`.
-2. `rules_pre_gate`: local deterministic `prellm-gate` runs first; only `expensive-model` cases call `openai/gpt-5.5-pro`.
-3. `local_cheap_llm_pre_gate`: a local Ollama/OpenAI-compatible llama or Gemma endpoint acts as the gate; only `expensive-model` cases call `openai/gpt-5.5-pro`.
+1. `baseline_all_advanced`: every case calls the advanced model.
+2. `rules_pre_gate`: local deterministic `prellm-gate` runs first; only `expensive-model` cases call the advanced model.
+3. `local_cheap_llm_pre_gate`: a local Ollama/OpenAI-compatible llama or Gemma endpoint acts as the gate; only `expensive-model` cases call the advanced model.
 
 The score is a bounded proxy:
 
@@ -29,18 +29,49 @@ Use real SWE-bench Lite rows while still avoiding provider calls:
 PYTHONPATH=src python3 tools/prellm_cost_benchmark.py --swebench-length 3
 ```
 
-## Live run
+## Live run with ChatGPT/Codex auth
 
-Live mode requires API access for the advanced model. By default, the harness uses the direct OpenAI API provider with `gpt-5.5-pro`.
-ChatGPT web/desktop subscriptions are not API credentials; set `OPENAI_API_KEY` for programmable runs.
-Token cost is estimated from the CLI rates unless provider usage returns a direct cost.
+Use `--advanced-provider codex-cli` when the advanced model should run through Codex's ChatGPT/OAuth-backed CLI instead of a Platform API key.
+This calls `codex exec --json`, records the `turn.completed.usage` token counts, and estimates equivalent cost from the configured token rates.
+If you use a flat ChatGPT subscription, treat the dollar figure as an equivalent API-rate comparison, not a separate invoice line.
+
+The CLI needs valid Codex auth in `CODEX_HOME`, or a `CODEX_ACCESS_TOKEN` for trusted automation.
+
+```bash
+PYTHONPATH=src python3 tools/prellm_cost_benchmark.py \
+  --execute \
+  --advanced-provider codex-cli \
+  --advanced-model gpt-5.5 \
+  --codex-home /home/bibo/.pi/agent \
+  --swebench-length 3 \
+  --output artifacts/prellm_cost_benchmark.live.json
+```
+
+If the cached ChatGPT/Codex token is stale, re-authenticate that Codex home:
+
+```bash
+CODEX_HOME=/home/bibo/.pi/agent codex login
+```
+
+If `codex` is not on `PATH`, use the bundled entrypoint:
+
+```bash
+CODEX_HOME=/home/bibo/.pi/agent \
+node /home/bibo/.openclaw-claw/npm/projects/openclaw-codex-8902d781d4/node_modules/@openclaw/codex/node_modules/@openai/codex/bin/codex.js login
+```
+
+## Live run with API providers
+
+API mode is still supported for repeatable runs where Platform billing is desired.
+By default, the harness uses the direct OpenAI API provider with `gpt-5.5-pro`.
+Set `OPENAI_API_KEY` for programmable API runs.
 
 ```bash
 OPENAI_API_KEY=... \
 PYTHONPATH=src python3 tools/prellm_cost_benchmark.py \
   --execute \
-  --swebench-length 3 \
-  --output artifacts/prellm_cost_benchmark.live.json
+  --advanced-provider openai \
+  --advanced-model gpt-5.5-pro
 ```
 
 OpenRouter remains available only as an explicit alternate provider:

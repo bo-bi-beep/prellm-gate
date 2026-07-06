@@ -7,6 +7,8 @@ import math
 import os
 from pathlib import Path
 import re
+import shlex
+import subprocess
 import time
 from typing import Any
 import urllib.error
@@ -21,6 +23,10 @@ DEFAULT_DATASET = "princeton-nlp/SWE-bench_Lite"
 DEFAULT_SPLIT = "test"
 DEFAULT_ADVANCED_PROVIDER = "openai"
 DEFAULT_ADVANCED_MODEL = "gpt-5.5-pro"
+DEFAULT_CODEX_BIN = (
+    "/home/bibo/.openclaw-claw/npm/projects/openclaw-codex-8902d781d4/"
+    "node_modules/@openclaw/codex/node_modules/@openai/codex/bin/codex.js"
+)
 DEFAULT_ADVANCED_INPUT_COST_PER_1M = 30.0
 DEFAULT_ADVANCED_OUTPUT_COST_PER_1M = 180.0
 ROUTES = {route.value for route in GateRoute}
@@ -269,7 +275,10 @@ def call_advanced_model(
     messages: list[dict[str, str]],
     max_tokens: int,
     temperature: float,
+    args: argparse.Namespace,
 ) -> tuple[str, dict[str, Any], float]:
+    if provider == "codex-cli":
+        return call_codex_cli(model, messages, args)
     if provider == "openai":
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
@@ -302,6 +311,80 @@ def call_advanced_model(
     payload = request_json(url, body=body, headers=headers)
     elapsed_ms = (time.perf_counter() - started) * 1000
     return payload["choices"][0]["message"]["content"], payload.get("usage") or {}, elapsed_ms
+
+
+def codex_prompt(messages: list[dict[str, str]]) -> str:
+    return "\n\n".join(f"{message['role'].upper()}:\n{message['content']}" for message in messages)
+
+
+def call_codex_cli(
+    model: str,
+    messages: list[dict[str, str]],
+    args: argparse.Namespace,
+) -> tuple[str, dict[str, Any], float]:
+    codex_bin = Path(args.codex_bin)
+    if not codex_bin.exists():
+        raise RuntimeError(f"Codex CLI entrypoint does not exist: {codex_bin}")
+
+    command = [
+        "node",
+        str(codex_bin),
+        "-a",
+        "never",
+        "exec",
+        "--json",
+        "--model",
+        model,
+        "--sandbox",
+        "read-only",
+        "--cd",
+        str(Path.cwd()),
+    ]
+    if args.codex_ephemeral:
+        command.append("--ephemeral")
+    command.append(codex_prompt(messages))
+
+    env = os.environ.copy()
+    if args.codex_home:
+        env["CODEX_HOME"] = args.codex_home
+
+    started = time.perf_counter()
+    process = subprocess.run(
+        command,
+        cwd=Path.cwd(),
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=args.codex_timeout_seconds,
+    )
+    elapsed_ms = (time.perf_counter() - started) * 1000
+
+    content = ""
+    usage: dict[str, Any] = {}
+    errors: list[str] = []
+    for line in process.stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        event_type = event.get("type")
+        if event_type == "item.completed":
+            item = event.get("item") or {}
+            if item.get("type") == "agent_message":
+                content = str(item.get("text") or content)
+        elif event_type == "turn.completed":
+            usage = event.get("usage") or usage
+        elif event_type in {"error", "turn.failed"}:
+            error = event.get("message") or (event.get("error") or {}).get("message")
+            if error:
+                errors.append(str(error))
+
+    if process.returncode != 0:
+        details = "; ".join(errors) or process.stderr.strip()[:500] or f"exit status {process.returncode}"
+        quoted = shlex.join(command[:8] + ["..."])
+        raise RuntimeError(f"Codex CLI provider failed via {quoted}: {details}")
+
+    return content, usage, elapsed_ms
 
 
 def discover_local_endpoint(base_url: str | None, local_model: str | None, kind: str) -> dict[str, str] | None:
@@ -450,6 +533,7 @@ def run_advanced_call(
             messages,
             args.max_advanced_tokens,
             args.temperature,
+            args,
         )
         usage = usage_from_provider(
             raw_usage,
@@ -680,7 +764,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--split", default=DEFAULT_SPLIT)
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--swebench-length", type=int, default=3)
-    parser.add_argument("--advanced-provider", choices=("openai", "openrouter"), default=DEFAULT_ADVANCED_PROVIDER)
+    parser.add_argument("--advanced-provider", choices=("openai", "openrouter", "codex-cli"), default=DEFAULT_ADVANCED_PROVIDER)
     parser.add_argument("--advanced-model", default=DEFAULT_ADVANCED_MODEL)
     parser.add_argument("--advanced-input-cost-per-1m", type=float, default=DEFAULT_ADVANCED_INPUT_COST_PER_1M)
     parser.add_argument("--advanced-output-cost-per-1m", type=float, default=DEFAULT_ADVANCED_OUTPUT_COST_PER_1M)
@@ -695,6 +779,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run-advanced-output-tokens", type=int, default=256)
     parser.add_argument("--dry-run-gate-output-tokens", type=int, default=24)
     parser.add_argument("--temperature", type=float, default=0.0)
+    parser.add_argument("--codex-bin", default=DEFAULT_CODEX_BIN)
+    parser.add_argument("--codex-home", help="Optional CODEX_HOME for ChatGPT/OAuth-backed codex exec runs.")
+    parser.add_argument("--codex-timeout-seconds", type=int, default=180)
+    parser.add_argument("--codex-ephemeral", action="store_true", help="Run codex exec without persisting session files.")
     parser.add_argument("--output", default="artifacts/prellm_cost_benchmark.json")
     return parser.parse_args()
 
