@@ -296,6 +296,9 @@ def discover_local_endpoint(base_url: str | None, local_model: str | None, kind:
         [
             ("http://127.0.0.1:11434", "ollama"),
             ("http://localhost:11434", "ollama"),
+            ("http://127.0.0.1:11435", "llamacpp"),
+            ("http://localhost:11435", "llamacpp"),
+            ("http://desktop-161rhm9.tail8684a5.ts.net:11435", "llamacpp"),
             ("http://127.0.0.1:1234", "openai"),
             ("http://localhost:1234", "openai"),
             ("http://127.0.0.1:8080", "openai"),
@@ -306,7 +309,7 @@ def discover_local_endpoint(base_url: str | None, local_model: str | None, kind:
     seen: set[tuple[str, str]] = set()
     for url, candidate_kind in candidates:
         if candidate_kind == "auto":
-            for inferred in ("ollama", "openai"):
+            for inferred in ("ollama", "openai", "llamacpp"):
                 endpoint = discover_local_endpoint(url, local_model, inferred)
                 if endpoint:
                     return endpoint
@@ -319,6 +322,9 @@ def discover_local_endpoint(base_url: str | None, local_model: str | None, kind:
             if candidate_kind == "ollama":
                 payload = request_json(f"{url}/api/tags")
                 models = [item.get("name") or item.get("model") for item in payload.get("models", [])]
+            elif candidate_kind == "llamacpp":
+                payload = request_json(f"{url}/v1/models")
+                models = [item.get("id") for item in payload.get("data", [])]
             else:
                 payload = request_json(f"{openai_base_url(url)}/v1/models")
                 models = [item.get("id") for item in payload.get("data", [])]
@@ -357,6 +363,23 @@ def call_local_gate(endpoint: dict[str, str], messages: list[dict[str, str]], ma
         usage = {
             "prompt_eval_count": payload.get("prompt_eval_count"),
             "eval_count": payload.get("eval_count"),
+        }
+    elif endpoint["kind"] == "llamacpp":
+        prompt = "\n\n".join(f"{message['role'].upper()}:\n{message['content']}" for message in messages)
+        payload = request_json(
+            f"{endpoint['base_url']}/completion",
+            body={
+                "prompt": prompt,
+                "temperature": 0,
+                "n_predict": max_tokens,
+            },
+            headers={"Content-Type": "application/json"},
+        )
+        content = payload.get("content", "")
+        timings = payload.get("timings") or {}
+        usage = {
+            "prompt_tokens": payload.get("tokens_evaluated") or timings.get("prompt_n"),
+            "completion_tokens": payload.get("tokens_predicted") or timings.get("predicted_n"),
         }
     else:
         payload = request_json(
@@ -638,7 +661,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--local-output-cost-per-1m", type=float, default=0.0)
     parser.add_argument("--local-base-url")
     parser.add_argument("--local-model")
-    parser.add_argument("--local-kind", choices=("auto", "ollama", "openai"), default="auto")
+    parser.add_argument("--local-kind", choices=("auto", "ollama", "openai", "llamacpp"), default="auto")
     parser.add_argument("--skip-local-gate", action="store_true")
     parser.add_argument("--max-advanced-tokens", type=int, default=800)
     parser.add_argument("--max-gate-tokens", type=int, default=120)

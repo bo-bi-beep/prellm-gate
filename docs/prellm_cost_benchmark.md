@@ -58,7 +58,7 @@ The local gate is discovered in this order:
 - `PRELLM_GATE_LOCAL_URL`
 - `LOCAL_LLM_BASE_URL`
 - `OLLAMA_HOST`
-- common local Ollama and OpenAI-compatible ports
+- common local Ollama, OpenAI-compatible, and llama.cpp ports
 
 It looks for model names containing `gemma` or `llama`, unless `--local-model` is provided.
 
@@ -78,6 +78,16 @@ PYTHONPATH=src python3 tools/prellm_cost_benchmark.py \
   --local-kind openai \
   --local-base-url http://127.0.0.1:1234/v1 \
   --local-model local-model-name
+```
+
+For llama.cpp servers that expose `/completion`:
+
+```bash
+PYTHONPATH=src python3 tools/prellm_cost_benchmark.py \
+  --execute \
+  --local-kind llamacpp \
+  --local-base-url http://127.0.0.1:11435 \
+  --local-model gemma
 ```
 
 If no local endpoint is found, the local-gate strategy fails closed to `expensive-model` and marks gate tokens as dry-run estimates.
