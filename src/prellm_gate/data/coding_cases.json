@@ -1,0 +1,29 @@
+{
+  "cases": [
+    {
+      "name": "humaneval-style function synthesis",
+      "benchmark": "humaneval",
+      "prompt": "Write a function max_pair_sum(nums) that returns the largest sum of any two distinct integers in nums."
+    },
+    {
+      "name": "mbpp-style list transformation",
+      "benchmark": "mbpp",
+      "prompt": "Given a list of strings, implement a function that returns only the strings containing balanced parentheses."
+    },
+    {
+      "name": "bug fix with failing assertion",
+      "benchmark": "coding",
+      "prompt": "Fix the bug in this function so the assertion passes: def clamp(x, lo, hi): return min(lo, max(x, hi)); assert clamp(5, 1, 10) == 5"
+    },
+    {
+      "name": "unit test generation",
+      "benchmark": "coding",
+      "prompt": "Write pytest unit tests for a retry helper that backs off after transient HTTP 429 responses."
+    },
+    {
+      "name": "algorithm explanation with code",
+      "benchmark": "coding",
+      "prompt": "Implement breadth-first search for a grid maze and explain the time complexity."
+    }
+  ]
+}

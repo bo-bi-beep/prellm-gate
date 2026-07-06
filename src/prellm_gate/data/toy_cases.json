@@ -1,0 +1,62 @@
+{
+  "cases": [
+    {
+      "name": "known path lookup",
+      "text": "What is the path for config?",
+      "context": {
+        "known_paths": {
+          "config": "config/app.yaml"
+        }
+      },
+      "expected_route": "rules"
+    },
+    {
+      "name": "repeated status check",
+      "text": "Status check?",
+      "history": [
+        "Status check?",
+        "Status check?"
+      ],
+      "expected_route": "cache"
+    },
+    {
+      "name": "short formatting request",
+      "text": "Please rephrase this line.",
+      "expected_route": "cheap-model"
+    },
+    {
+      "name": "security risk",
+      "text": "Summarize the vulnerability impact and policy risk.",
+      "expected_route": "expensive-model"
+    },
+    {
+      "name": "underspecified fragment",
+      "text": "Help",
+      "expected_route": "clarify"
+    },
+    {
+      "name": "default reasoning request",
+      "text": "How should this architecture handle fallback uncertainty?",
+      "expected_route": "expensive-model"
+    },
+    {
+      "name": "failed terminal trajectory",
+      "text": "Can we just retry the same command?",
+      "trajectory": [
+        {
+          "domain": "terminal",
+          "action": "python deploy.py",
+          "observation": "Permission denied",
+          "success": false
+        },
+        {
+          "domain": "terminal",
+          "action": "python deploy.py --force",
+          "observation": "failed with exit status 1",
+          "success": false
+        }
+      ],
+      "expected_route": "expensive-model"
+    }
+  ]
+}
